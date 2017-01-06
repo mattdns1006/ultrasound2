@@ -46,7 +46,7 @@ def read(batchSize=5,shuffle=True):
     return X, Y, path
 
 if __name__ == "__main__":
-    X, Y, path = read(10,shuffle=True)
+    X, Y, path = read(batchSize=10,shuffle=True)
     init_op = tf.initialize_all_variables()
     with tf.Session() as sess:
         sess.run(init_op)
