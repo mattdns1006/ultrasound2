@@ -16,23 +16,39 @@ def show(img):
     plt.imshow(img,cmap=cm.gray)
     plt.show()
 
-def read(batchSize=5,shuffle=True):
-    shape = [420,580,1]
-    csv = tf.train.string_input_producer(["train.csv"],num_epochs=1,shuffle=shuffle)
+def showBatch(batchX,batchY,figsize=(15,15)):
+    n, h, w, c = batchX.shape
+    batchX = batchX.reshape(n*h,w)
+    n, h, w, c = batchY.shape
+    batchY = batchY.reshape(n*h,w)
+    plt.figure(figsize=figsize)
+    plt.subplot(1,2,1)
+    plt.imshow(batchX,cmap=cm.gray)
+    plt.subplot(1,2,2)
+    plt.imshow(batchY,cmap=cm.gray)
+    plt.show()
+
+def getImg(path,size):
+    imageBytes = tf.read_file(path)
+    decodedImg = tf.image.decode_jpeg(imageBytes)
+    decodedImg = tf.image.resize_images(decodedImg,size)
+    decodedImg = tf.cast(decodedImg,tf.float32)
+    decodedImg = tf.mul(decodedImg,1/255.0)
+    return decodedImg
+
+def read(csvPath,batchSize,inSize,outSize,shuffle):
+    csv = tf.train.string_input_producer([csvPath],num_epochs=1,shuffle=shuffle)
     reader = tf.TextLineReader(skip_header_lines=1)
     k, v = reader.read(csv)
     defaults = [tf.constant([],dtype = tf.string),
                 tf.constant([],dtype = tf.string)]
     xPath, yPath = tf.decode_csv(v,record_defaults = defaults)
     xPathRe = tf.reshape(xPath,[1])
-    def getImg(path):
-        imageBytes = tf.read_file(path)
-        decodedImg = tf.image.decode_jpeg(imageBytes)
-        decodedImg = tf.cast(decodedImg,tf.float32)
-        decodedImg = tf.mul(decodedImg,1/255.0)
-        return decodedImg
-    x,y = getImg(xPath), getImg(yPath)
-    Q = tf.FIFOQueue(64,[tf.float32,tf.float32,tf.string],shapes=[shape,shape,[1]])
+
+    x,y = getImg(xPath,inSize), getImg(yPath,outSize)
+    inSize += [1]
+    outSize += [1]
+    Q = tf.FIFOQueue(64,[tf.float32,tf.float32,tf.string],shapes=[inSize,outSize,[1]])
     enQ = Q.enqueue([x,y,xPathRe])
     QR = tf.train.QueueRunner(
             Q,
@@ -46,7 +62,9 @@ def read(batchSize=5,shuffle=True):
     return X, Y, path
 
 if __name__ == "__main__":
-    X, Y, path = read(batchSize=10,shuffle=True)
+    inSize = [200,200]
+    outSize = [100,100]
+    X, Y, path = read(csvPath="train.csv",batchSize=4,inSize=inSize,outSize=outSize,shuffle=True)
     init_op = tf.initialize_all_variables()
     with tf.Session() as sess:
         sess.run(init_op)
@@ -57,8 +75,9 @@ if __name__ == "__main__":
         try:
             while True:
                 x, y, path_ = sess.run([X,Y,path])
+                showBatch(x,y)
                 count += x.shape[0]
-                print(path_)
+                pdb.set_trace()
                 if coord.should_stop():
                     break
         except Exception,e:
