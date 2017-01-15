@@ -32,24 +32,53 @@ def dilated_convolution2d(inTensor,fS,inFeats,outFeats,dilation):
     with tf.name_scope("biases"):
         bias = B([outFeats])
     with tf.name_scope("conv"):
-        filtered = tf.nn.atrous_conv2d(inTensor,weight,dilation,padding='SAME') + bias
-    return filtered
+        out = tf.nn.atrous_conv2d(inTensor,weight,dilation,padding='VALID') + bias
+    return out 
 
 def denseBlock(x,inFeats,outFeats,layerNo,is_training):
-    def growth(inTensor,toAdd,growthNumber):
+    def growth(inTensor,toAdd,inFeats,outFeats,growthNumber,layerNo):
         with tf.name_scope("growth_{0}".format(growthNumber)):
-            filtered = convolution2d(inTensor,inFeats,outFeats)
+            filtered = convolution2d(inTensor,1,inFeats,outFeats)
             with tf.name_scope("add"):
-                out = af(toAdd + filtered)
+                out = af(bn(toAdd + filtered,is_training=is_training,name="bn_{0}_{1}".format(growthNumber,layerNo)))
         return out
-    x1 = growth(inTensor=x,toAdd=x,growthNumber=1)
+    x1 = growth(inTensor=x,toAdd=x,inFeats=inFeats,outFeats=outFeats,growthNumber=1,layerNo=layerNo)
     x10 = tf.add(x1,x)
-    x2 = growth(inTensor=x1,toAdd=x10,growthNumber=2)
+    x2 = growth(inTensor=x1,toAdd=x10,inFeats=inFeats,outFeats=outFeats,growthNumber=2,layerNo=layerNo)
     x210 = tf.add(x2,x10)
-    x3 = growth(inTensor=x2,toAdd=x210,growthNumber=3)
-    x3210 = tf.add(x3,x210)
-    x4 = growth(inTensor=x3,toAdd=x3210,growthNumber=4)
-    return x4
+    x3 = growth(inTensor=x2,toAdd=x210,inFeats=inFeats,outFeats=outFeats,growthNumber=3,layerNo=layerNo)
+    #x3210 = tf.add(x3,x210)
+    #x4 = growth(inTensor=x3,toAdd=x3210,inFeats=inFeats,outFeats=outFeats,growthNumber=4,layerNo=layerNo)
+    return x3
+
+def denseNet(x,is_training,filterSize=3,initFeats=16):
+    X = convolution2d(x,filterSize,1,initFeats)
+    X = af(bn(X,is_training=is_training,name="bn_conv_0"))
+    for layerNo in range(6):
+        with tf.variable_scope("dense_{0}".format(layerNo)):
+            X = denseBlock(X,initFeats,initFeats,layerNo,is_training)
+            print(X.get_shape().as_list())
+            holes = np.power(2,layerNo)
+            print(holes)
+            X = dilated_convolution2d(X,3,initFeats,initFeats,3)
+            print(X.get_shape().as_list())
+            X = af(bn(X,is_training=is_training,name="bn_conv"))
+            print(X.get_shape().as_list())
+
+    X = convolution2d(X,filterSize,initFeats,1)
+    X = af(bn(X,is_training=is_training,name="bn_conv_out"))
+    return X
+
+def model1(x,is_training,filterSize=3,initFeats=16):
+    X = convolution2d(x,filterSize,1,initFeats)
+    X = af(bn(X,is_training=is_training,name="bn_conv_init"))
+    for layerNo in range(6):
+        X = convolution2d(X,filterSize,initFeats,initFeats)
+        X = af(bn(X,is_training=is_training,name="bn_conv_{0}".format(layerNo)))
+        X = dilated_convolution2d(X,3,initFeats,initFeats,3)
+    X = convolution2d(X,filterSize,initFeats,1)
+    X = af(bn(X,is_training=is_training,name="bn_conv_out"))
+    return X
 
 def model0(x,is_training,nLayers=4,initFeats=16,filterSize=3):
     X = convolution2d(x,filterSize,1,initFeats)
@@ -76,16 +105,15 @@ def model0(x,is_training,nLayers=4,initFeats=16,filterSize=3):
 if __name__ == "__main__":
     import pdb
     import numpy as np
-    X = tf.placeholder(tf.float32,shape=[None,256,256,1])
+    X = tf.placeholder(tf.float32,shape=[None,128,128,1])
     is_training = tf.placeholder(tf.bool,name="is_training")
-    Y = model0(X,is_training=is_training,initFeats=16)
-    merged = tf.summary.merge_all()
+    Y = denseNet(X,is_training=is_training,initFeats=16)
     with tf.Session() as sess:
         tf.global_variables_initializer().run()
-        for i in xrange(10):
-            x = np.random.rand(1,256,256,1)
-            summary,y_ = sess.run([merged,Y],feed_dict={X:x,is_training.name:True})
-            print(y_.shape)
+        for i in range(10):
+            x = np.random.rand(1,128,128,1)
+            y_ = sess.run([Y],feed_dict={X:x,is_training.name:True})
+            print(y_[0].shape)
             if i == 9:
                 pdb.set_trace()
 

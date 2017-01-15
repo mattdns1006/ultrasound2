@@ -1,7 +1,7 @@
 import tensorflow as tf
 from loadData import *
 import sys
-from model import model0
+from model import model0, model1, denseNet
 sys.path.append("/Users/matt/misc/tfFunctions/")
 from dice import dice as dice
 import cv2
@@ -37,10 +37,13 @@ def nodes(batchSize,inSize,outSize,trainOrTest):
             outSize=outSize,
             shuffle=shuffle) #nodes
     is_training = tf.placeholder(tf.bool)
+    with tf.variable_scope("Input"):
+        imgSum(X)
     with tf.variable_scope("Truth"):
         imgSum(Y)
     with tf.variable_scope("Prediction"):
-        YPred = model0(X,is_training=is_training,nLayers=3)
+        YPred = model1(X,is_training=is_training,initFeats=16)
+        #YPred = model0(X,is_training=is_training,nLayers=3)
         imgSum(YPred)
     with tf.variable_scope("MSE"):
         mse = lossFn(Y,YPred)
@@ -60,16 +63,16 @@ if __name__ == "__main__":
     FLAGS = flags.FLAGS 
     flags.DEFINE_float("lr",0.001,"Initial learning rate.")
     flags.DEFINE_integer("sf",256,"Size of input image")
-    flags.DEFINE_integer("initFeats",16,"Initial number of features.")
+    flags.DEFINE_integer("initFeats",8,"Initial number of features.")
     flags.DEFINE_integer("incFeats",16,"Number of features growing.")
     flags.DEFINE_integer("nDown",8,"Number of blocks going down.")
-    flags.DEFINE_integer("bS",5,"Batch size.")
+    flags.DEFINE_integer("bS",3,"Batch size.")
     flags.DEFINE_integer("load",1,"Load saved model.")
-    inSize = [128,128]
-    outSize = [32,32]
+    inSize = [96,96]
+    outSize = [60,60]
     savePath = "models/model0.tf"
 
-    count = 0
+    count = load = 0
     for epoch in range(nEpochs):
         print("{0} of {1}".format(epoch,nEpochs))
         if epoch > 0:
