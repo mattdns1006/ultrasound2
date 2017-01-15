@@ -3,7 +3,7 @@ from loadData import *
 import sys
 from model import model0
 sys.path.append("/Users/matt/misc/tfFunctions/")
-from dice import diceROC
+from dice import dice as dice
 import cv2
 
 def varSum(var):
@@ -36,40 +36,51 @@ def nodes(batchSize,inSize,outSize,trainOrTest):
             inSize=inSize,
             outSize=outSize,
             shuffle=shuffle) #nodes
-    return X,Y,path
+    is_training = tf.placeholder(tf.bool)
+    with tf.variable_scope("Truth"):
+        imgSum(Y)
+    with tf.variable_scope("Prediction"):
+        YPred = model0(X,is_training=is_training,nLayers=3)
+        imgSum(YPred)
+    with tf.variable_scope("MSE"):
+        mse = lossFn(Y,YPred)
+        varSum(mse)
+    with tf.variable_scope("Dice"):
+        diceScore, diceThresh = dice(YPred,Y)
+        imgSum(diceThresh)
+        varSum(diceScore)
+    trainOp = trainer(mse,0.0001)
+    return X,Y,YPred,path,mse,diceScore,is_training,trainOp
 
 if __name__ == "__main__":
     import pdb
-    inSize = [256,256]
-    outSize = [32,32]
-    batchSize = 5
-
-    print("Input Dim = h={0},w={1}".format(inSize,outSize))
-    is_training = tf.placeholder(tf.bool)
-    X,Y, path = nodes(batchSize=batchSize,inSize=inSize,outSize=outSize,trainOrTest="train")
-    YPred = model0(X,is_training=is_training)
-    mse = lossFn(Y,YPred)
-    dice = diceROC(Y,YPred)
     nEpochs = 10
-    varSum(mse)
-    varSum(dice)
-    imgSum(YPred)
-    imgSum(Y)
-    load = 1
-    trainOp = trainer(mse,0.0001)
 
-    merged = tf.summary.merge_all()
-    saver = tf.train.Saver()
+    flags = tf.app.flags
+    FLAGS = flags.FLAGS 
+    flags.DEFINE_float("lr",0.001,"Initial learning rate.")
+    flags.DEFINE_integer("sf",256,"Size of input image")
+    flags.DEFINE_integer("initFeats",16,"Initial number of features.")
+    flags.DEFINE_integer("incFeats",16,"Number of features growing.")
+    flags.DEFINE_integer("nDown",8,"Number of blocks going down.")
+    flags.DEFINE_integer("bS",5,"Batch size.")
+    flags.DEFINE_integer("load",1,"Load saved model.")
+    inSize = [128,128]
+    outSize = [32,32]
     savePath = "models/model0.tf"
 
     count = 0
     for epoch in range(nEpochs):
         print("{0} of {1}".format(epoch,nEpochs))
-
         if epoch > 0:
-            load = 1
+            load = 1 
+        tf.reset_default_graph()
+        X,Y,YPred,path,mse,diceScore,is_training,trainOp = nodes(batchSize=FLAGS.bS,inSize=inSize,outSize=outSize,trainOrTest="train")
+        saver = tf.train.Saver()
+        merged = tf.summary.merge_all()
         with tf.Session() as sess:
-            if load == 1:
+            if FLAGS.load == 1 or load == 1:
+                print("Restoring")
                 saver.restore(sess,savePath)
             else:
                 tf.initialize_all_variables().run()
@@ -79,8 +90,8 @@ if __name__ == "__main__":
             threads = tf.train.start_queue_runners(sess=sess,coord=coord)
             try:
                 while True:
-                    _, summary, x,y,yPred,loss,dice_ = sess.run([trainOp,merged,X,Y,YPred,mse,dice],feed_dict={is_training:True})
-                    count += batchSize
+                    _, summary = sess.run([trainOp,merged],feed_dict={is_training:True})
+                    count += FLAGS.bS
                     train_writer.add_summary(summary,count)
                     if coord.should_stop():
                         break

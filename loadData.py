@@ -44,9 +44,11 @@ def read(csvPath,batchSize,inSize,outSize,shuffle):
     xPathRe = tf.reshape(xPath,[1])
 
     x,y = getImg(xPath,inSize), getImg(yPath,outSize)
-    inSize += [1]
-    outSize += [1]
-    Q = tf.FIFOQueue(64,[tf.float32,tf.float32,tf.string],shapes=[inSize,outSize,[1]])
+    inSizeC = list(inSize)
+    outSizeC = list(outSize)
+    inSizeC += [1]
+    outSizeC += [1]
+    Q = tf.FIFOQueue(64,[tf.float32,tf.float32,tf.string],shapes=[inSizeC,outSizeC,[1]])
     enQ = Q.enqueue([x,y,xPathRe])
     QR = tf.train.QueueRunner(
             Q,
