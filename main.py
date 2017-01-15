@@ -1,14 +1,18 @@
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from loadData import *
 import sys
 from model import model0
 sys.path.append("/Users/matt/misc/tfFunctions/")
+from dice import diceROC
+import cv2
 
 def varSum(var):
     with tf.name_scope('summaries'):
         mean = tf.reduce_mean(var)
         tf.summary.scalar('mean', mean)
+
+def imgSum(img):
+    tf.summary.image("Image",img)
 
 def lossFn(y,yPred):
     return tf.reduce_mean(tf.square(tf.sub(y,yPred)))
@@ -38,24 +42,29 @@ if __name__ == "__main__":
     import pdb
     inSize = [256,256]
     outSize = [32,32]
-    batchSize = 10
+    batchSize = 5
 
     print("Input Dim = h={0},w={1}".format(inSize,outSize))
     is_training = tf.placeholder(tf.bool)
     X,Y, path = nodes(batchSize=batchSize,inSize=inSize,outSize=outSize,trainOrTest="train")
     YPred = model0(X,is_training=is_training)
     mse = lossFn(Y,YPred)
+    dice = diceROC(Y,YPred)
     nEpochs = 10
     varSum(mse)
+    varSum(dice)
+    imgSum(YPred)
+    imgSum(Y)
     load = 1
-    trainOp = trainer(mse,0.001)
+    trainOp = trainer(mse,0.0001)
 
     merged = tf.summary.merge_all()
     saver = tf.train.Saver()
     savePath = "models/model0.tf"
 
     count = 0
-    for epoch in xrange(nEpochs):
+    for epoch in range(nEpochs):
+        print("{0} of {1}".format(epoch,nEpochs))
 
         if epoch > 0:
             load = 1
@@ -70,12 +79,12 @@ if __name__ == "__main__":
             threads = tf.train.start_queue_runners(sess=sess,coord=coord)
             try:
                 while True:
-                    _, summary = sess.run([trainOp,merged],feed_dict={is_training:True})
+                    _, summary, x,y,yPred,loss,dice_ = sess.run([trainOp,merged,X,Y,YPred,mse,dice],feed_dict={is_training:True})
                     count += batchSize
                     train_writer.add_summary(summary,count)
                     if coord.should_stop():
                         break
-            except Exception,e:
+            except Exception as e:
                 coord.request_stop(e)
             finally:
                 coord.request_stop()

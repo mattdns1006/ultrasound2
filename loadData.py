@@ -1,7 +1,5 @@
 import tensorflow as tf
 import cv2, glob
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import pandas as pd
 import pdb
 
@@ -80,7 +78,7 @@ if __name__ == "__main__":
                 pdb.set_trace()
                 if coord.should_stop():
                     break
-        except Exception,e:
+        except Exception as e:
             coord.request_stop(e)
         finally:
             coord.request_stop()
