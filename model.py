@@ -66,7 +66,7 @@ def denseNet(x,is_training,filterSize=3,initFeats=16):
             print(X.get_shape().as_list())
 
     X = convolution2d(X,filterSize,initFeats,1)
-    X = af(bn(X,is_training=is_training,name="bn_conv_out"))
+    X = tf.nn.sigmoid(X,is_training=is_training,name="bn_conv_out")
     return X
 
 def model1(x,is_training,filterSize=3,initFeats=16):
@@ -77,7 +77,7 @@ def model1(x,is_training,filterSize=3,initFeats=16):
         X = af(bn(X,is_training=is_training,name="bn_conv_{0}".format(layerNo)))
         X = dilated_convolution2d(X,3,initFeats,initFeats,3)
     X = convolution2d(X,filterSize,initFeats,1)
-    X = af(bn(X,is_training=is_training,name="bn_conv_out"))
+    X = tf.nn.sigmoid(X,is_training=is_training,name="bn_conv_out")
     return X
 
 def model0(x,is_training,nLayers=4,initFeats=16,filterSize=3):
@@ -100,6 +100,7 @@ def model0(x,is_training,nLayers=4,initFeats=16,filterSize=3):
             if layerNo == nLayers- 1:
                 break
             X = tf.nn.max_pool(X,[1,3,3,1],[1,2,2,1],'SAME')
+    X = tf.nn.sigmoid(X,is_training=is_training,name="bn_conv_out")
     return X
 
 if __name__ == "__main__":
